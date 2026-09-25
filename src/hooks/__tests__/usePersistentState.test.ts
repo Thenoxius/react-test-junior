@@ -1,0 +1,36 @@
+import { act, renderHook } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { usePersistentState } from '../usePersistentState.ts'
+
+describe('usePersistentState', () => {
+  it('uses the initial value when nothing is stored', () => {
+    const { result } = renderHook(() => usePersistentState('count', 1))
+
+    expect(result.current[0]).toBe(1)
+  })
+
+  it('saves changes to localStorage', () => {
+    const { result } = renderHook(() => usePersistentState('count', 1))
+
+    act(() => result.current[1](5))
+
+    expect(result.current[0]).toBe(5)
+    expect(localStorage.getItem('count')).toBe('5')
+  })
+
+  it('loads a previously stored value', () => {
+    localStorage.setItem('count', '42')
+
+    const { result } = renderHook(() => usePersistentState('count', 1))
+
+    expect(result.current[0]).toBe(42)
+  })
+
+  it('falls back to the initial value when the stored value is broken', () => {
+    localStorage.setItem('count', '{not json')
+
+    const { result } = renderHook(() => usePersistentState('count', 1))
+
+    expect(result.current[0]).toBe(1)
+  })
+})

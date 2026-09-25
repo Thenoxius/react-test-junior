@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { DeliveriesProvider } from './context/DeliveriesProvider.tsx'
 
 export function App() {
   return (
@@ -42,7 +43,11 @@ export function App() {
         id="app"
         className="w-full px-4 bg-offroad-yellow text-offroad-text"
       >
-        <Outlet />
+        {/* Lives here, not in Home, so the socket stays subscribed while
+            navigating between pages */}
+        <DeliveriesProvider>
+          <Outlet />
+        </DeliveriesProvider>
       </main>
     </div>
   )
