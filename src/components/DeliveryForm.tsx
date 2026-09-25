@@ -2,6 +2,7 @@ import {
   Button,
   FieldError,
   Form,
+  Heading,
   Input,
   Label,
   RadioButton,
@@ -80,7 +81,9 @@ export function DeliveryForm({
   return (
     <>
       <div className={panelHeader}>
-        <h2 className={panelHeading}>{heading}</h2>
+        <Heading level={2} className={panelHeading}>
+          {heading}
+        </Heading>
         <Button
           onPress={onCancel}
           aria-label="Close form"

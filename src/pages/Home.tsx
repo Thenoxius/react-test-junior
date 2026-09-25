@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Button } from 'react-aria-components'
-import { primaryButton } from '../components/styles.ts'
+import { Button, Heading } from 'react-aria-components'
+import { panel, primaryButton } from '../components/styles.ts'
 import { DeliveryDetails } from '../components/DeliveryDetails.tsx'
 import { DeliveryForm } from '../components/DeliveryForm.tsx'
 import { DeliveryList } from '../components/DeliveryList.tsx'
-import { DiscardChangesDialog } from '../components/DiscardChangesDialog.tsx'
+import { ConfirmDialog } from '../components/ConfirmDialog.tsx'
 import { useDeliveries } from '../context/DeliveriesContext.ts'
 import { usePersistentState } from '../hooks/usePersistentState.ts'
 import {
@@ -35,28 +35,28 @@ export function Home() {
     'home:draft',
     EMPTY_DRAFT
   )
+  // The form values at the moment adding or editing started. Comparing
+  // against this (not the live data) tells the user's own changes apart
+  // from changes that came in through the socket meanwhile.
+  const [originalDraft, setOriginalDraft] = usePersistentState<DeliveryDraft>(
+    'home:originalDraft',
+    EMPTY_DRAFT
+  )
 
   // The action waiting for the user to confirm discarding their changes
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  // Shown when saving a delivery that changed while it was being edited
+  const [showEditConflict, setShowEditConflict] = useState(false)
 
   // Look up by id so the panel reflects live socket updates
   const selectedDelivery = deliveries.find(
     (delivery) => delivery.id === selectedId
   )
 
-  const hasUnsavedChanges = getHasUnsavedChanges()
-
-  function getHasUnsavedChanges() {
-    if (panelMode === 'add') {
-      return !isSameDraft(draft, EMPTY_DRAFT)
-    }
-
-    if (panelMode === 'edit' && selectedDelivery) {
-      return !isSameDraft(draft, deliveryToDraft(selectedDelivery))
-    }
-
-    return false
-  }
+  const isFormOpen =
+    panelMode === 'add' ||
+    (panelMode === 'edit' && selectedDelivery !== undefined)
+  const hasUnsavedChanges = isFormOpen && !isSameDraft(draft, originalDraft)
 
   function runAction(action: PendingAction) {
     if (action.type === 'select') {
@@ -107,6 +107,7 @@ export function Home() {
   function startAdding() {
     setSelectedId(null)
     setDraft(EMPTY_DRAFT)
+    setOriginalDraft(EMPTY_DRAFT)
     setPanelMode('add')
   }
 
@@ -115,7 +116,9 @@ export function Home() {
       return
     }
 
-    setDraft(deliveryToDraft(selectedDelivery))
+    const currentValues = deliveryToDraft(selectedDelivery)
+    setDraft(currentValues)
+    setOriginalDraft(currentValues)
     setPanelMode('edit')
   }
 
@@ -124,13 +127,45 @@ export function Home() {
       const newDelivery = draftToDelivery(crypto.randomUUID(), draft)
       addDelivery(newDelivery)
       setSelectedId(newDelivery.id)
+      setPanelMode('view')
     }
 
     if (panelMode === 'edit' && selectedDelivery) {
-      updateDelivery(draftToDelivery(selectedDelivery.id, draft))
+      const changedWhileEditing = !isSameDraft(
+        deliveryToDraft(selectedDelivery),
+        originalDraft
+      )
+
+      if (changedWhileEditing) {
+        setShowEditConflict(true)
+        return
+      }
+
+      saveEditedDelivery()
+    }
+  }
+
+  function saveEditedDelivery() {
+    if (!selectedDelivery) {
+      return
     }
 
+    updateDelivery(draftToDelivery(selectedDelivery.id, draft))
+    setShowEditConflict(false)
     setPanelMode('view')
+  }
+
+  // Replaces the user's changes with the latest data, so they can make
+  // their change again on top of it
+  function loadLatestVersion() {
+    if (!selectedDelivery) {
+      return
+    }
+
+    const latestValues = deliveryToDraft(selectedDelivery)
+    setDraft(latestValues)
+    setOriginalDraft(latestValues)
+    setShowEditConflict(false)
   }
 
   function renderPanel() {
@@ -170,9 +205,9 @@ export function Home() {
 
   return (
     <div className="p-6">
-      <h1 className="mb-8 w-full text-center text-3xl font-bold">
+      <Heading level={1} className="mb-8 w-full text-center text-3xl font-bold">
         Welcome to Offroad package delivery!
-      </h1>
+      </Heading>
       {/* Above both columns, so the list and details start at the same height */}
       <div className="mb-4">
         <Button onPress={requestAdd} className={primaryButton}>
@@ -180,23 +215,39 @@ export function Home() {
         </Button>
       </div>
       <div className="grid gap-6 md:grid-cols-2">
-        <DeliveryList
-          deliveries={deliveries}
-          selectedId={selectedId}
-          onSelect={requestSelect}
-        />
+        <div className={panel}>
+          <DeliveryList
+            deliveries={deliveries}
+            selectedId={selectedId}
+            onSelect={requestSelect}
+          />
+        </div>
         <section
           aria-label="Delivery details"
-          className="self-start rounded-lg bg-white p-4 shadow md:sticky
-            md:top-6"
+          className={`${panel} md:sticky md:top-6`}
         >
           {renderPanel()}
         </section>
       </div>
-      <DiscardChangesDialog
+      <ConfirmDialog
         isOpen={pendingAction !== null}
-        onDiscard={discardChanges}
-        onKeepEditing={() => setPendingAction(null)}
+        heading="Discard unsaved changes?"
+        message="The changes you made to this delivery haven't been saved yet."
+        primaryLabel="Discard"
+        onPrimary={discardChanges}
+        secondaryLabel="Keep editing"
+        onSecondary={() => setPendingAction(null)}
+        onDismiss={() => setPendingAction(null)}
+      />
+      <ConfirmDialog
+        isOpen={showEditConflict}
+        heading="This delivery was changed while you were editing"
+        message="Someone else updated this delivery after you started editing. Save your version to overwrite their change, or load the latest version and make your change again."
+        primaryLabel="Save my version"
+        onPrimary={saveEditedDelivery}
+        secondaryLabel="Load latest version"
+        onSecondary={loadLatestVersion}
+        onDismiss={() => setShowEditConflict(false)}
       />
     </div>
   )

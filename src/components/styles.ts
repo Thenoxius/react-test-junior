@@ -11,6 +11,9 @@ export const secondaryButton = `${baseButton} border border-black bg-white hover
 export const closeButton =
   'cursor-pointer rounded px-2 text-gray-600 outline-none hover:text-black focus-visible:ring-2 focus-visible:ring-black'
 
+// The white box around the delivery list and around the details panel
+export const panel = 'self-start rounded-lg bg-white p-4 shadow'
+
 export const panelHeader = 'mb-4 flex items-start justify-between gap-4'
 
 export const panelHeading = 'text-xl font-bold'

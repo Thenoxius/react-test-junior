@@ -27,4 +27,17 @@ describe('About component', () => {
     const homeLink = screen.getByRole('link', { name: /back to home/i })
     expect(homeLink).toHaveAttribute('href', '/')
   })
+
+  it('uses a React Aria link to go back home', () => {
+    render(
+      <MemoryRouter>
+        <About />
+      </MemoryRouter>
+    )
+
+    // React Aria marks every element it renders with data-rac
+    expect(screen.getByRole('link', { name: /back to home/i })).toHaveAttribute(
+      'data-rac'
+    )
+  })
 })

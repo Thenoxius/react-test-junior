@@ -84,11 +84,97 @@ describe('DeliveryList', () => {
       />
     )
 
-    // Tab into the first list, arrow down to the next item, select it
+    // Tab past the section button into the first list, arrow down to the
+    // next item, select it
+    await user.tab()
     await user.tab()
     await user.keyboard('{ArrowDown}{Enter}')
 
     expect(onSelect).toHaveBeenCalledWith('4')
+  })
+
+  it('shows how many deliveries each section has', () => {
+    render(
+      <DeliveryList
+        deliveries={[
+          ...testDeliveries,
+          { ...testDeliveries[0], id: '4', name: 'Audio - Speakers' },
+        ]}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'New packages (2)' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Upcoming deliveries (1)' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Delivered packages (1)' })
+    ).toBeInTheDocument()
+  })
+
+  it('collapses and expands a section', async () => {
+    const user = userEvent.setup()
+    render(
+      <DeliveryList
+        deliveries={testDeliveries}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />
+    )
+    const sectionButton = screen.getByRole('button', {
+      name: /New packages/,
+    })
+    expect(sectionButton).toHaveAttribute('aria-expanded', 'true')
+
+    await user.click(sectionButton)
+
+    expect(sectionButton).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      screen.queryByRole('option', { name: 'Audio - Headphones' })
+    ).not.toBeInTheDocument()
+    // The other sections stay open
+    expect(
+      screen.getByRole('option', { name: 'Books - Handbook' })
+    ).toBeInTheDocument()
+
+    await user.click(sectionButton)
+
+    expect(sectionButton).toHaveAttribute('aria-expanded', 'true')
+    expect(
+      screen.getByRole('option', { name: 'Audio - Headphones' })
+    ).toBeInTheDocument()
+  })
+
+  it('remembers collapsed sections after a refresh', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(
+      <DeliveryList
+        deliveries={testDeliveries}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /Delivered packages/ }))
+    unmount()
+    render(
+      <DeliveryList
+        deliveries={testDeliveries}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />
+    )
+
+    expect(
+      screen.getByRole('button', { name: /Delivered packages/ })
+    ).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      screen.getByRole('button', { name: /New packages/ })
+    ).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('says so when a section has no deliveries', () => {

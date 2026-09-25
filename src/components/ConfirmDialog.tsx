@@ -7,24 +7,35 @@ import {
 } from 'react-aria-components'
 import { primaryButton, secondaryButton } from './styles.ts'
 
-interface DiscardChangesDialogProps {
+interface ConfirmDialogProps {
   isOpen: boolean
-  onDiscard: () => void
-  onKeepEditing: () => void
+  heading: string
+  message: string
+  primaryLabel: string
+  onPrimary: () => void
+  secondaryLabel: string
+  onSecondary: () => void
+  // Escape or a click outside the dialog
+  onDismiss: () => void
 }
 
-export function DiscardChangesDialog({
+export function ConfirmDialog({
   isOpen,
-  onDiscard,
-  onKeepEditing,
-}: DiscardChangesDialogProps) {
+  heading,
+  message,
+  primaryLabel,
+  onPrimary,
+  secondaryLabel,
+  onSecondary,
+  onDismiss,
+}: ConfirmDialogProps) {
   return (
     <ModalOverlay
       isOpen={isOpen}
       isDismissable
       onOpenChange={(open) => {
         if (!open) {
-          onKeepEditing()
+          onDismiss()
         }
       }}
       className="fixed inset-0 z-10 flex items-center justify-center bg-black/40
@@ -33,17 +44,15 @@ export function DiscardChangesDialog({
       <Modal className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
         <Dialog role="alertdialog" className="outline-none">
           <Heading slot="title" className="mb-2 text-xl font-bold">
-            Discard unsaved changes?
+            {heading}
           </Heading>
-          <p className="mb-6">
-            The changes you made to this delivery haven't been saved yet.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button onPress={onKeepEditing} className={secondaryButton}>
-              Keep editing
+          <p className="mb-6">{message}</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button onPress={onSecondary} className={secondaryButton}>
+              {secondaryLabel}
             </Button>
-            <Button onPress={onDiscard} className={primaryButton}>
-              Discard
+            <Button onPress={onPrimary} className={primaryButton}>
+              {primaryLabel}
             </Button>
           </div>
         </Dialog>

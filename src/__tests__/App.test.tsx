@@ -29,6 +29,40 @@ describe('App', () => {
     setupFakeSocket()
   })
 
+  it('uses React Aria links for the navigation', async () => {
+    renderApp()
+    await screen.findByRole('option', { name: 'Audio - Headphones' })
+
+    // React Aria marks every element it renders with data-rac
+    for (const name of ['Offroad Apps BV logo', 'Home', 'About']) {
+      expect(screen.getByRole('link', { name })).toHaveAttribute('data-rac')
+    }
+  })
+
+  it('marks the current page in the navigation', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await screen.findByRole('option', { name: 'Audio - Headphones' })
+
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(screen.getByRole('link', { name: 'About' })).not.toHaveAttribute(
+      'aria-current'
+    )
+
+    await user.click(screen.getByRole('link', { name: 'About' }))
+
+    expect(screen.getByRole('link', { name: 'About' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute(
+      'aria-current'
+    )
+  })
+
   it('subscribes to the socket only once while navigating', async () => {
     const user = userEvent.setup()
     renderApp()

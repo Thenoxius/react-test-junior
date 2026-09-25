@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SocketActionsEnum } from '../../api/types.ts'
@@ -22,6 +22,15 @@ function renderHome() {
 
 function getPanel() {
   return screen.getByRole('region', { name: 'Delivery details' })
+}
+
+// React Aria moves focus into a dialog a moment after it opens. Keyboard
+// input before that goes to the page behind it, so wait like a user would.
+async function waitForDialogFocus() {
+  const dialog = await screen.findByRole('alertdialog')
+  await waitFor(() =>
+    expect(dialog.contains(document.activeElement)).toBe(true)
+  )
 }
 
 // crypto.randomUUID(), e.g. "3b241101-e2bb-4255-8caf-4136c566a962"
@@ -272,6 +281,7 @@ describe('Home page', () => {
     await user.click(screen.getByRole('button', { name: 'Edit delivery' }))
     await user.type(screen.getByLabelText(/Product model/), ' Pro')
     await user.click(screen.getByRole('option', { name: 'Books - Handbook' }))
+    await waitForDialogFocus()
     await user.keyboard('{Escape}')
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
@@ -304,6 +314,112 @@ describe('Home page', () => {
       within(getPanel()).getByText('Select a delivery to see its details.')
     ).toBeInTheDocument()
     expect(option).toHaveAttribute('aria-selected', 'false')
+  })
+
+  describe('when the socket changes a delivery that is being edited', () => {
+    const headphonesDelivered = {
+      ...testDeliveries[0],
+      delivered: true,
+    }
+
+    // Opens Headphones in the form, changes the model, and then lets the
+    // socket mark Headphones as delivered before saving
+    async function editWhileSocketChangesIt() {
+      const user = userEvent.setup()
+      renderHome()
+
+      await user.click(
+        await screen.findByRole('option', { name: 'Audio - Headphones' })
+      )
+      await user.click(screen.getByRole('button', { name: 'Edit delivery' }))
+      const modelInput = screen.getByLabelText(/Product model/)
+      await user.clear(modelInput)
+      await user.type(modelInput, 'Speakers')
+
+      pushFromSocket([
+        headphonesDelivered,
+        testDeliveries[1],
+        testDeliveries[2],
+      ])
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+
+      return user
+    }
+
+    it('warns instead of overwriting the change', async () => {
+      await editWhileSocketChangesIt()
+
+      expect(
+        screen.getByRole('alertdialog', {
+          name: 'This delivery was changed while you were editing',
+        })
+      ).toBeInTheDocument()
+      expect(socketFn).not.toHaveBeenCalled()
+    })
+
+    it('saves my version when I choose to', async () => {
+      const user = await editWhileSocketChangesIt()
+
+      await user.click(screen.getByRole('button', { name: 'Save my version' }))
+
+      expect(socketFn).toHaveBeenCalledWith(SocketActionsEnum.UPDATE, {
+        id: '1',
+        name: 'Audio - Speakers',
+        inTransit: false,
+        delivered: false,
+      })
+      expectDetails({
+        id: '1',
+        productType: 'Audio',
+        productModel: 'Speakers',
+        status: 'New',
+      })
+    })
+
+    it('loads the latest version into the form when I choose to', async () => {
+      const user = await editWhileSocketChangesIt()
+
+      await user.click(
+        screen.getByRole('button', { name: 'Load latest version' })
+      )
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(screen.getByLabelText(/Product model/)).toHaveValue('Headphones')
+      expect(screen.getByRole('radio', { name: 'Delivered' })).toBeChecked()
+      expect(socketFn).not.toHaveBeenCalled()
+    })
+
+    it('keeps editing when the warning is closed with Escape', async () => {
+      const user = await editWhileSocketChangesIt()
+
+      await waitForDialogFocus()
+      await user.keyboard('{Escape}')
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(screen.getByLabelText(/Product model/)).toHaveValue('Speakers')
+      expect(socketFn).not.toHaveBeenCalled()
+    })
+
+    it('does not count the socket change as my unsaved change', async () => {
+      const user = userEvent.setup()
+      renderHome()
+
+      await user.click(
+        await screen.findByRole('option', { name: 'Audio - Headphones' })
+      )
+      await user.click(screen.getByRole('button', { name: 'Edit delivery' }))
+      pushFromSocket([
+        headphonesDelivered,
+        testDeliveries[1],
+        testDeliveries[2],
+      ])
+      await user.click(screen.getByRole('option', { name: 'Books - Handbook' }))
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+        'Books - Handbook'
+      )
+    })
   })
 
   it('keeps an added delivery after a refresh', async () => {

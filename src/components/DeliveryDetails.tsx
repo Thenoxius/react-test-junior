@@ -1,4 +1,4 @@
-import { Button } from 'react-aria-components'
+import { Button, Heading } from 'react-aria-components'
 import type { IDelivery } from '../api/types.ts'
 import {
   getProductModel,
@@ -37,7 +37,9 @@ export function DeliveryDetails({
   return (
     <>
       <div className={panelHeader}>
-        <h2 className={panelHeading}>{delivery.name}</h2>
+        <Heading level={2} className={panelHeading}>
+          {delivery.name}
+        </Heading>
         <Button
           onPress={onClose}
           aria-label="Close details"
