@@ -5,7 +5,8 @@ import {
   Form,
   Input,
   Label,
-  Radio,
+  RadioButton,
+  RadioField,
   RadioGroup,
   TextField,
 } from 'react-aria-components'
@@ -123,18 +124,19 @@ export function DeliveryForm({
             <Label className={fieldLabel}>Status</Label>
             <div className={`${fieldValue} flex flex-wrap gap-x-4`}>
               {DELIVERY_STATUSES.map((status) => (
-                <Radio
-                  key={status}
-                  value={status}
-                  className="flex cursor-pointer items-center gap-2 outline-none
-                    before:size-4 before:rounded-full before:border
-                    before:border-gray-500 focus-visible:before:ring-2
-                    focus-visible:before:ring-offroad-primary
-                    selected:before:border-4
-                    selected:before:border-offroad-primary"
-                >
-                  {status}
-                </Radio>
+                <RadioField key={status} value={status}>
+                  <RadioButton
+                    className="flex cursor-pointer items-center gap-2
+                      outline-none before:size-4 before:rounded-full
+                      before:border before:border-gray-500
+                      focus-visible:before:ring-2
+                      focus-visible:before:ring-offroad-primary
+                      selected:before:border-4
+                      selected:before:border-offroad-primary"
+                  >
+                    {status}
+                  </RadioButton>
+                </RadioField>
               ))}
             </div>
           </RadioGroup>
