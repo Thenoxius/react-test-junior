@@ -18,7 +18,6 @@ import {
   NAME_SEPARATOR,
 } from '../utils/delivery.ts'
 import {
-  closeButton,
   fieldError,
   fieldGrid,
   fieldInput,
@@ -26,7 +25,6 @@ import {
   fieldRow,
   fieldValue,
   panelActions,
-  panelHeader,
   panelHeading,
   primaryButton,
   secondaryButton,
@@ -80,18 +78,9 @@ export function DeliveryForm({
 }: DeliveryFormProps) {
   return (
     <>
-      <div className={panelHeader}>
-        <Heading level={2} className={panelHeading}>
-          {heading}
-        </Heading>
-        <Button
-          onPress={onCancel}
-          aria-label="Close form"
-          className={closeButton}
-        >
-          ✕
-        </Button>
-      </div>
+      <Heading level={2} className={panelHeading}>
+        {heading}
+      </Heading>
       <Form
         onSubmit={(event) => {
           // Stay on the page: the parent saves the delivery instead

@@ -20,9 +20,22 @@ function renderHome() {
   )
 }
 
-function getPanel() {
+// The three columns: LIST | DETAILS | ADD/EDIT FORM
+function getList() {
+  return screen.getByRole('region', { name: 'Deliveries' })
+}
+
+function getDetails() {
   return screen.getByRole('region', { name: 'Delivery details' })
 }
+
+function getForm() {
+  return screen.getByRole('region', { name: 'Delivery form' })
+}
+
+const DETAILS_PLACEHOLDER = 'Select a delivery to see its details.'
+const FORM_PLACEHOLDER =
+  'Press "+ Add delivery" or "Edit delivery" to open the form.'
 
 // React Aria moves focus into a dialog a moment after it opens. Keyboard
 // input before that goes to the page behind it, so wait like a user would.
@@ -44,9 +57,9 @@ interface ExpectedDetails {
   status: string
 }
 
-// Checks every row of the details panel: each value next to its own label
+// Checks every row of the details column: each value next to its own label
 function expectDetails(expected: ExpectedDetails) {
-  const panel = within(getPanel())
+  const panel = within(getDetails())
 
   function getValue(label: string) {
     return panel.getByText(label, { selector: 'dt' }).nextElementSibling
@@ -58,12 +71,84 @@ function expectDetails(expected: ExpectedDetails) {
   expect(getValue('Status')).toHaveTextContent(expected.status)
 }
 
+function expectFormClosed() {
+  expect(within(getForm()).getByText(FORM_PLACEHOLDER)).toBeInTheDocument()
+  expect(screen.queryByLabelText(/Product type/)).not.toBeInTheDocument()
+}
+
 describe('Home page', () => {
   let socketFn: ReturnType<typeof setupFakeSocket>
 
   beforeEach(() => {
     vi.clearAllMocks()
     socketFn = setupFakeSocket()
+  })
+
+  describe('three columns', () => {
+    it('shows the list, the details and the form as three columns', async () => {
+      renderHome()
+
+      expect(
+        await within(getList()).findByRole('option', {
+          name: 'Audio - Headphones',
+        })
+      ).toBeInTheDocument()
+      expect(
+        within(getDetails()).getByText(DETAILS_PLACEHOLDER)
+      ).toBeInTheDocument()
+      expectFormClosed()
+    })
+
+    it('keeps the details visible next to the edit form', async () => {
+      const user = userEvent.setup()
+      renderHome()
+
+      await user.click(
+        await screen.findByRole('option', { name: 'Audio - Headphones' })
+      )
+      await user.click(screen.getByRole('button', { name: 'Edit delivery' }))
+
+      expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
+        'Audio - Headphones'
+      )
+      expect(within(getForm()).getByRole('heading')).toHaveTextContent(
+        'Edit Audio - Headphones'
+      )
+    })
+
+    it('keeps the selected delivery in the details while adding', async () => {
+      const user = userEvent.setup()
+      renderHome()
+
+      await user.click(
+        await screen.findByRole('option', { name: 'Books - Handbook' })
+      )
+      await user.click(screen.getByRole('button', { name: '+ Add delivery' }))
+
+      expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
+        'Books - Handbook'
+      )
+      expect(within(getForm()).getByRole('heading')).toHaveTextContent(
+        'New delivery'
+      )
+    })
+
+    it('lets you browse deliveries while adding, without losing the form', async () => {
+      const user = userEvent.setup()
+      renderHome()
+
+      await user.click(screen.getByRole('button', { name: '+ Add delivery' }))
+      await user.type(screen.getByLabelText(/Product type/), 'Pets')
+      await user.click(
+        await screen.findByRole('option', { name: 'Books - Handbook' })
+      )
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
+        'Books - Handbook'
+      )
+      expect(screen.getByLabelText(/Product type/)).toHaveValue('Pets')
+    })
   })
 
   it('shows the deliveries from the socket', async () => {
@@ -79,15 +164,11 @@ describe('Home page', () => {
     const user = userEvent.setup()
     renderHome()
 
-    expect(
-      within(getPanel()).getByText('Select a delivery to see its details.')
-    ).toBeInTheDocument()
-
     await user.click(
       await screen.findByRole('option', { name: 'Books - Handbook' })
     )
 
-    expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+    expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
       'Books - Handbook'
     )
     expectDetails({
@@ -110,7 +191,7 @@ describe('Home page', () => {
 
     const newOption = screen.getByRole('option', { name: 'Pets - Dog Food' })
     expect(newOption).toHaveAttribute('aria-selected', 'true')
-    expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+    expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
       'Pets - Dog Food'
     )
     expectDetails({
@@ -119,6 +200,7 @@ describe('Home page', () => {
       productModel: 'Dog Food',
       status: 'In transit',
     })
+    expectFormClosed()
     expect(socketFn).toHaveBeenCalledWith(
       SocketActionsEnum.ADD,
       expect.objectContaining({
@@ -157,7 +239,7 @@ describe('Home page', () => {
     await user.click(screen.getByRole('radio', { name: 'Delivered' }))
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+    expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
       'Audio - Speakers'
     )
     expectDetails({
@@ -166,6 +248,7 @@ describe('Home page', () => {
       productModel: 'Speakers',
       status: 'Delivered',
     })
+    expectFormClosed()
     expect(socketFn).toHaveBeenCalledWith(SocketActionsEnum.UPDATE, {
       id: '1',
       name: 'Audio - Speakers',
@@ -185,9 +268,10 @@ describe('Home page', () => {
     await user.type(screen.getByLabelText(/Product model/), ' Pro')
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
-    expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+    expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
       'Audio - Headphones'
     )
+    expectFormClosed()
     expect(socketFn).not.toHaveBeenCalled()
   })
 
@@ -215,9 +299,10 @@ describe('Home page', () => {
     await user.click(screen.getByRole('option', { name: 'Books - Handbook' }))
     await user.click(screen.getByRole('button', { name: 'Discard' }))
 
-    expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+    expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
       'Books - Handbook'
     )
+    expectFormClosed()
     expect(socketFn).not.toHaveBeenCalled()
   })
 
@@ -232,9 +317,10 @@ describe('Home page', () => {
     await user.click(screen.getByRole('option', { name: 'Books - Handbook' }))
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-    expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+    expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
       'Books - Handbook'
     )
+    expectFormClosed()
   })
 
   it('updates the open details when the socket changes that delivery', async () => {
@@ -250,7 +336,7 @@ describe('Home page', () => {
       testDeliveries[2],
     ])
 
-    expect(within(getPanel()).getByText('Delivered')).toBeInTheDocument()
+    expect(within(getDetails()).getByText('Delivered')).toBeInTheDocument()
   })
 
   it('asks before discarding unsaved changes when adding a delivery', async () => {
@@ -265,7 +351,7 @@ describe('Home page', () => {
     await user.click(screen.getByRole('button', { name: '+ Add delivery' }))
     await user.click(screen.getByRole('button', { name: 'Discard' }))
 
-    expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+    expect(within(getForm()).getByRole('heading')).toHaveTextContent(
       'New delivery'
     )
     expect(screen.getByLabelText(/Product model/)).toHaveValue('')
@@ -288,32 +374,14 @@ describe('Home page', () => {
     expect(screen.getByLabelText(/Product model/)).toHaveValue('Headphones Pro')
   })
 
-  it('goes back to the empty panel when adding is cancelled', async () => {
+  it('closes the form when adding is cancelled', async () => {
     const user = userEvent.setup()
     renderHome()
 
     await user.click(screen.getByRole('button', { name: '+ Add delivery' }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
-    expect(
-      within(getPanel()).getByText('Select a delivery to see its details.')
-    ).toBeInTheDocument()
-  })
-
-  it('clears the selection when the details are closed', async () => {
-    const user = userEvent.setup()
-    renderHome()
-
-    const option = await screen.findByRole('option', {
-      name: 'Books - Handbook',
-    })
-    await user.click(option)
-    await user.click(screen.getByRole('button', { name: 'Close details' }))
-
-    expect(
-      within(getPanel()).getByText('Select a delivery to see its details.')
-    ).toBeInTheDocument()
-    expect(option).toHaveAttribute('aria-selected', 'false')
+    expectFormClosed()
   })
 
   describe('when the socket changes a delivery that is being edited', () => {
@@ -374,6 +442,7 @@ describe('Home page', () => {
         productModel: 'Speakers',
         status: 'New',
       })
+      expectFormClosed()
     })
 
     it('loads the latest version into the form when I choose to', async () => {
@@ -416,7 +485,7 @@ describe('Home page', () => {
       await user.click(screen.getByRole('option', { name: 'Books - Handbook' }))
 
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-      expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+      expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
         'Books - Handbook'
       )
     })
@@ -466,5 +535,8 @@ describe('Home page', () => {
     expect(
       screen.getByRole('option', { name: 'Books - Handbook' })
     ).toHaveAttribute('aria-selected', 'true')
+    expect(within(getDetails()).getByRole('heading')).toHaveTextContent(
+      'Books - Handbook'
+    )
   })
 })

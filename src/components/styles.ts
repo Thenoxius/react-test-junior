@@ -8,15 +8,10 @@ export const primaryButton = `${baseButton} bg-black text-white hover:bg-gray-80
 
 export const secondaryButton = `${baseButton} border border-black bg-white hover:bg-gray-100 pressed:bg-gray-200`
 
-export const closeButton =
-  'cursor-pointer rounded px-2 text-gray-600 outline-none hover:text-black focus-visible:ring-2 focus-visible:ring-black'
-
 // The white box around the delivery list and around the details panel
 export const panel = 'self-start rounded-lg bg-white p-4 shadow'
 
-export const panelHeader = 'mb-4 flex items-start justify-between gap-4'
-
-export const panelHeading = 'text-xl font-bold'
+export const panelHeading = 'mb-4 text-xl font-bold'
 
 export const fieldGrid = 'mb-6 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2'
 

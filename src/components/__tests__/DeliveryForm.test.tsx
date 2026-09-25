@@ -118,13 +118,20 @@ describe('DeliveryForm', () => {
     expect(onSave).not.toHaveBeenCalled()
   })
 
-  it('cancels from both the Cancel button and the close button', async () => {
+  it('cancels with the Cancel button', async () => {
     const user = userEvent.setup()
     const { onCancel } = renderForm()
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    await user.click(screen.getByRole('button', { name: 'Close form' }))
 
-    expect(onCancel).toHaveBeenCalledTimes(2)
+    expect(onCancel).toHaveBeenCalledOnce()
+  })
+
+  it('has no close button, only Save and Cancel', () => {
+    renderForm()
+
+    expect(
+      screen.getAllByRole('button').map((button) => button.textContent)
+    ).toEqual(['Save', 'Cancel'])
   })
 })

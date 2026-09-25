@@ -15,9 +15,12 @@ import {
   isSameDraft,
 } from '../utils/delivery.ts'
 
-type PanelMode = 'view' | 'edit' | 'add'
+// What the form column shows
+type FormMode = 'closed' | 'edit' | 'add'
 
-type PendingAction = { type: 'select'; id: string } | { type: 'add' }
+// Actions that can throw away unsaved changes in the form
+type PendingAction =
+  { type: 'select'; id: string } | { type: 'add' } | { type: 'edit' }
 
 export function Home() {
   const { deliveries, addDelivery, updateDelivery } = useDeliveries()
@@ -27,9 +30,9 @@ export function Home() {
     'home:selectedId',
     null
   )
-  const [panelMode, setPanelMode] = usePersistentState<PanelMode>(
-    'home:panelMode',
-    'view'
+  const [formMode, setFormMode] = usePersistentState<FormMode>(
+    'home:formMode',
+    'closed'
   )
   const [draft, setDraft] = usePersistentState<DeliveryDraft>(
     'home:draft',
@@ -48,15 +51,37 @@ export function Home() {
   // Shown when saving a delivery that changed while it was being edited
   const [showEditConflict, setShowEditConflict] = useState(false)
 
-  // Look up by id so the panel reflects live socket updates
+  // Look up by id so the details reflect live socket updates
   const selectedDelivery = deliveries.find(
     (delivery) => delivery.id === selectedId
   )
 
-  const isFormOpen =
-    panelMode === 'add' ||
-    (panelMode === 'edit' && selectedDelivery !== undefined)
+  // The edit form belongs to the selected delivery, so it can only be open
+  // while that delivery is selected
+  const isEditing = formMode === 'edit' && selectedDelivery !== undefined
+  const isFormOpen = formMode === 'add' || isEditing
   const hasUnsavedChanges = isFormOpen && !isSameDraft(draft, originalDraft)
+
+  // Selecting another delivery only leaves the form when it is editing the
+  // selected delivery. A new delivery being added has nothing to do with
+  // the selection, so browsing keeps that form.
+  function leavesForm(action: PendingAction) {
+    if (action.type === 'select') {
+      return isEditing
+    }
+
+    return true
+  }
+
+  // Ask before throwing away unsaved changes in the form
+  function requestAction(action: PendingAction) {
+    if (hasUnsavedChanges && leavesForm(action)) {
+      setPendingAction(action)
+      return
+    }
+
+    runAction(action)
+  }
 
   function runAction(action: PendingAction) {
     if (action.type === 'select') {
@@ -66,16 +91,10 @@ export function Home() {
     if (action.type === 'add') {
       startAdding()
     }
-  }
 
-  // Ask before throwing away unsaved changes in the form
-  function requestAction(action: PendingAction) {
-    if (hasUnsavedChanges) {
-      setPendingAction(action)
-      return
+    if (action.type === 'edit') {
+      startEditing()
     }
-
-    runAction(action)
   }
 
   function discardChanges() {
@@ -86,29 +105,22 @@ export function Home() {
     setPendingAction(null)
   }
 
-  function requestSelect(id: string) {
-    requestAction({ type: 'select', id })
-  }
-
-  function requestAdd() {
-    requestAction({ type: 'add' })
-  }
-
   function selectDelivery(id: string) {
+    if (isEditing) {
+      closeForm()
+    }
+
     setSelectedId(id)
-    setPanelMode('view')
   }
 
-  function closeDetails() {
-    setSelectedId(null)
-    setPanelMode('view')
+  function closeForm() {
+    setFormMode('closed')
   }
 
   function startAdding() {
-    setSelectedId(null)
     setDraft(EMPTY_DRAFT)
     setOriginalDraft(EMPTY_DRAFT)
-    setPanelMode('add')
+    setFormMode('add')
   }
 
   function startEditing() {
@@ -119,18 +131,18 @@ export function Home() {
     const currentValues = deliveryToDraft(selectedDelivery)
     setDraft(currentValues)
     setOriginalDraft(currentValues)
-    setPanelMode('edit')
+    setFormMode('edit')
   }
 
   function saveDraft() {
-    if (panelMode === 'add') {
+    if (formMode === 'add') {
       const newDelivery = draftToDelivery(crypto.randomUUID(), draft)
       addDelivery(newDelivery)
       setSelectedId(newDelivery.id)
-      setPanelMode('view')
+      closeForm()
     }
 
-    if (panelMode === 'edit' && selectedDelivery) {
+    if (isEditing) {
       const changedWhileEditing = !isSameDraft(
         deliveryToDraft(selectedDelivery),
         originalDraft
@@ -152,7 +164,7 @@ export function Home() {
 
     updateDelivery(draftToDelivery(selectedDelivery.id, draft))
     setShowEditConflict(false)
-    setPanelMode('view')
+    closeForm()
   }
 
   // Replaces the user's changes with the latest data, so they can make
@@ -168,38 +180,36 @@ export function Home() {
     setShowEditConflict(false)
   }
 
-  function renderPanel() {
-    if (panelMode === 'add') {
+  function renderForm() {
+    if (formMode === 'add') {
       return (
         <DeliveryForm
           heading="New delivery"
           draft={draft}
           onDraftChange={setDraft}
           onSave={saveDraft}
-          onCancel={closeDetails}
+          onCancel={closeForm}
         />
       )
     }
 
-    if (panelMode === 'edit' && selectedDelivery) {
+    if (isEditing) {
       return (
         <DeliveryForm
-          heading={selectedDelivery.name}
+          heading={`Edit ${selectedDelivery.name}`}
           deliveryId={selectedDelivery.id}
           draft={draft}
           onDraftChange={setDraft}
           onSave={saveDraft}
-          onCancel={() => setPanelMode('view')}
+          onCancel={closeForm}
         />
       )
     }
 
     return (
-      <DeliveryDetails
-        delivery={selectedDelivery}
-        onEdit={startEditing}
-        onClose={closeDetails}
-      />
+      <p className="text-gray-600">
+        Press "+ Add delivery" or "Edit delivery" to open the form.
+      </p>
     )
   }
 
@@ -208,25 +218,38 @@ export function Home() {
       <Heading level={1} className="mb-8 w-full text-center text-3xl font-bold">
         Welcome to Offroad package delivery!
       </Heading>
-      {/* Above both columns, so the list and details start at the same height */}
+      {/* Above all columns, so the three boxes start at the same height */}
       <div className="mb-4">
-        <Button onPress={requestAdd} className={primaryButton}>
+        <Button
+          onPress={() => requestAction({ type: 'add' })}
+          className={primaryButton}
+        >
           + Add delivery
         </Button>
       </div>
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className={panel}>
+      {/* LIST OF DELIVERIES | DELIVERY DETAILS | ADD/EDIT DELIVERY FORM */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <section aria-label="Deliveries" className={panel}>
           <DeliveryList
             deliveries={deliveries}
             selectedId={selectedId}
-            onSelect={requestSelect}
+            onSelect={(id) => requestAction({ type: 'select', id })}
           />
-        </div>
+        </section>
         <section
           aria-label="Delivery details"
-          className={`${panel} md:sticky md:top-6`}
+          className={`${panel} lg:sticky lg:top-6`}
         >
-          {renderPanel()}
+          <DeliveryDetails
+            delivery={selectedDelivery}
+            onEdit={() => requestAction({ type: 'edit' })}
+          />
+        </section>
+        <section
+          aria-label="Delivery form"
+          className={`${panel} lg:sticky lg:top-6`}
+        >
+          {renderForm()}
         </section>
       </div>
       <ConfirmDialog
