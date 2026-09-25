@@ -1,4 +1,3 @@
-import type { FormEvent } from 'react'
 import {
   Button,
   FieldError,
@@ -6,6 +5,7 @@ import {
   Input,
   Label,
   RadioButton,
+  type RadioButtonRenderProps,
   RadioField,
   RadioGroup,
   TextField,
@@ -51,6 +51,16 @@ function validateNamePart(value: string) {
   return null
 }
 
+// The circle is drawn with ::before. Only one set of border classes is
+// applied at a time, so the selected and unselected styles never compete.
+function getRadioClassName({ isSelected }: RadioButtonRenderProps) {
+  const circleBorder = isSelected
+    ? 'before:border-4 before:border-offroad-primary'
+    : 'before:border before:border-gray-500'
+
+  return `flex cursor-pointer items-center gap-2 outline-none before:size-4 before:rounded-full focus-visible:before:ring-2 focus-visible:before:ring-offroad-primary ${circleBorder}`
+}
+
 export function DeliveryForm({
   heading,
   deliveryId,
@@ -59,11 +69,6 @@ export function DeliveryForm({
   onSave,
   onCancel,
 }: DeliveryFormProps) {
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    onSave()
-  }
-
   return (
     <>
       <div className={panelHeader}>
@@ -76,7 +81,13 @@ export function DeliveryForm({
           ✕
         </Button>
       </div>
-      <Form onSubmit={handleSubmit}>
+      <Form
+        onSubmit={(event) => {
+          // Stay on the page: the parent saves the delivery instead
+          event.preventDefault()
+          onSave()
+        }}
+      >
         <div className={fieldGrid}>
           <div className={fieldRow}>
             <span className={fieldLabel}>ID</span>
@@ -125,15 +136,7 @@ export function DeliveryForm({
             <div className={`${fieldValue} flex flex-wrap gap-x-4`}>
               {DELIVERY_STATUSES.map((status) => (
                 <RadioField key={status} value={status}>
-                  <RadioButton
-                    className="flex cursor-pointer items-center gap-2
-                      outline-none before:size-4 before:rounded-full
-                      before:border before:border-gray-500
-                      focus-visible:before:ring-2
-                      focus-visible:before:ring-offroad-primary
-                      selected:before:border-4
-                      selected:before:border-offroad-primary"
-                  >
+                  <RadioButton className={getRadioClassName}>
                     {status}
                   </RadioButton>
                 </RadioField>
