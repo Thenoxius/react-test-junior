@@ -69,6 +69,28 @@ describe('DeliveryList', () => {
     ).toHaveAttribute('aria-selected', 'false')
   })
 
+  it('can be used with the keyboard', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    const twoNewDeliveries = [
+      testDeliveries[0],
+      { ...testDeliveries[0], id: '4', name: 'Audio - Speakers' },
+    ]
+    render(
+      <DeliveryList
+        deliveries={twoNewDeliveries}
+        selectedId={null}
+        onSelect={onSelect}
+      />
+    )
+
+    // Tab into the first list, arrow down to the next item, select it
+    await user.tab()
+    await user.keyboard('{ArrowDown}{Enter}')
+
+    expect(onSelect).toHaveBeenCalledWith('4')
+  })
+
   it('says so when a section has no deliveries', () => {
     render(
       <DeliveryList

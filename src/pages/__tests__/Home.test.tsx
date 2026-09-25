@@ -3,7 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SocketActionsEnum } from '../../api/types.ts'
 import { DeliveriesProvider } from '../../context/DeliveriesProvider.tsx'
-import { setupFakeSocket } from '../../test/fakeSocket.ts'
+import {
+  pushFromSocket,
+  setupFakeSocket,
+  testDeliveries,
+} from '../../test/fakeSocket.ts'
 import { Home } from '../Home.tsx'
 
 vi.mock('../../api/data-socket.ts')
@@ -18,6 +22,31 @@ function renderHome() {
 
 function getPanel() {
   return screen.getByRole('region', { name: 'Delivery details' })
+}
+
+// crypto.randomUUID(), e.g. "3b241101-e2bb-4255-8caf-4136c566a962"
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+interface ExpectedDetails {
+  id: string | RegExp
+  productType: string
+  productModel: string
+  status: string
+}
+
+// Checks every row of the details panel: each value next to its own label
+function expectDetails(expected: ExpectedDetails) {
+  const panel = within(getPanel())
+
+  function getValue(label: string) {
+    return panel.getByText(label, { selector: 'dt' }).nextElementSibling
+  }
+
+  expect(getValue('ID')).toHaveTextContent(expected.id)
+  expect(getValue('Product type')).toHaveTextContent(expected.productType)
+  expect(getValue('Product model')).toHaveTextContent(expected.productModel)
+  expect(getValue('Status')).toHaveTextContent(expected.status)
 }
 
 describe('Home page', () => {
@@ -49,13 +78,15 @@ describe('Home page', () => {
       await screen.findByRole('option', { name: 'Books - Handbook' })
     )
 
-    const panel = getPanel()
-    expect(within(panel).getByRole('heading')).toHaveTextContent(
+    expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
       'Books - Handbook'
     )
-    expect(within(panel).getByText('Books')).toBeInTheDocument()
-    expect(within(panel).getByText('Handbook')).toBeInTheDocument()
-    expect(within(panel).getByText('In transit')).toBeInTheDocument()
+    expectDetails({
+      id: '2',
+      productType: 'Books',
+      productModel: 'Handbook',
+      status: 'In transit',
+    })
   })
 
   it('adds a new delivery', async () => {
@@ -73,6 +104,12 @@ describe('Home page', () => {
     expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
       'Pets - Dog Food'
     )
+    expectDetails({
+      id: UUID_PATTERN,
+      productType: 'Pets',
+      productModel: 'Dog Food',
+      status: 'In transit',
+    })
     expect(socketFn).toHaveBeenCalledWith(
       SocketActionsEnum.ADD,
       expect.objectContaining({
@@ -114,6 +151,12 @@ describe('Home page', () => {
     expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
       'Audio - Speakers'
     )
+    expectDetails({
+      id: '1',
+      productType: 'Audio',
+      productModel: 'Speakers',
+      status: 'Delivered',
+    })
     expect(socketFn).toHaveBeenCalledWith(SocketActionsEnum.UPDATE, {
       id: '1',
       name: 'Audio - Speakers',
@@ -182,6 +225,109 @@ describe('Home page', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
       'Books - Handbook'
+    )
+  })
+
+  it('updates the open details when the socket changes that delivery', async () => {
+    const user = userEvent.setup()
+    renderHome()
+    await user.click(
+      await screen.findByRole('option', { name: 'Books - Handbook' })
+    )
+
+    pushFromSocket([
+      testDeliveries[0],
+      { ...testDeliveries[1], inTransit: false, delivered: true },
+      testDeliveries[2],
+    ])
+
+    expect(within(getPanel()).getByText('Delivered')).toBeInTheDocument()
+  })
+
+  it('asks before discarding unsaved changes when adding a delivery', async () => {
+    const user = userEvent.setup()
+    renderHome()
+
+    await user.click(
+      await screen.findByRole('option', { name: 'Audio - Headphones' })
+    )
+    await user.click(screen.getByRole('button', { name: 'Edit delivery' }))
+    await user.type(screen.getByLabelText(/Product model/), ' Pro')
+    await user.click(screen.getByRole('button', { name: '+ Add delivery' }))
+    await user.click(screen.getByRole('button', { name: 'Discard' }))
+
+    expect(within(getPanel()).getByRole('heading')).toHaveTextContent(
+      'New delivery'
+    )
+    expect(screen.getByLabelText(/Product model/)).toHaveValue('')
+  })
+
+  it('keeps editing when the dialog is closed with Escape', async () => {
+    const user = userEvent.setup()
+    renderHome()
+
+    await user.click(
+      await screen.findByRole('option', { name: 'Audio - Headphones' })
+    )
+    await user.click(screen.getByRole('button', { name: 'Edit delivery' }))
+    await user.type(screen.getByLabelText(/Product model/), ' Pro')
+    await user.click(screen.getByRole('option', { name: 'Books - Handbook' }))
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/Product model/)).toHaveValue('Headphones Pro')
+  })
+
+  it('goes back to the empty panel when adding is cancelled', async () => {
+    const user = userEvent.setup()
+    renderHome()
+
+    await user.click(screen.getByRole('button', { name: '+ Add delivery' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(
+      within(getPanel()).getByText('Select a delivery to see its details.')
+    ).toBeInTheDocument()
+  })
+
+  it('clears the selection when the details are closed', async () => {
+    const user = userEvent.setup()
+    renderHome()
+
+    const option = await screen.findByRole('option', {
+      name: 'Books - Handbook',
+    })
+    await user.click(option)
+    await user.click(screen.getByRole('button', { name: 'Close details' }))
+
+    expect(
+      within(getPanel()).getByText('Select a delivery to see its details.')
+    ).toBeInTheDocument()
+    expect(option).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('keeps an added delivery after a refresh', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderHome()
+
+    await user.click(screen.getByRole('button', { name: '+ Add delivery' }))
+    await user.type(screen.getByLabelText(/Product type/), 'Pets')
+    await user.type(screen.getByLabelText(/Product model/), 'Dog Food')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    // After a refresh the real socket starts over without the new delivery
+    unmount()
+    socketFn = setupFakeSocket(testDeliveries)
+    renderHome()
+
+    expect(
+      await screen.findByRole('option', { name: 'Pets - Dog Food' })
+    ).toBeInTheDocument()
+    await vi.waitFor(() =>
+      expect(socketFn).toHaveBeenCalledWith(
+        SocketActionsEnum.ADD,
+        expect.objectContaining({ name: 'Pets - Dog Food' })
+      )
     )
   })
 

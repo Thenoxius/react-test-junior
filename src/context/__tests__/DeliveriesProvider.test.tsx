@@ -4,7 +4,11 @@ import { StrictMode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { deliveriesSocketSubscribe } from '../../api/data-socket.ts'
 import { type IDelivery, SocketActionsEnum } from '../../api/types.ts'
-import { setupFakeSocket, testDeliveries } from '../../test/fakeSocket.ts'
+import {
+  pushFromSocket,
+  setupFakeSocket,
+  testDeliveries,
+} from '../../test/fakeSocket.ts'
 import { useDeliveries } from '../DeliveriesContext.ts'
 import {
   DELIVERIES_STORAGE_KEY,
@@ -91,6 +95,26 @@ describe('DeliveriesProvider', () => {
       ...testDeliveries[0],
       name: 'Audio - Speakers',
     })
+  })
+
+  it('shows the deliveries from every later socket push', async () => {
+    renderProvider()
+    await screen.findByText('Audio - Headphones')
+
+    pushFromSocket([...testDeliveries, newDelivery])
+
+    expect(screen.getByText('Pets - Dog Food')).toBeInTheDocument()
+  })
+
+  it('throws a clear error when used outside the provider', () => {
+    // React logs the thrown error; keep the test output clean
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    expect(() => render(<DeliveryNames />)).toThrow(
+      'useDeliveries must be used inside a DeliveriesProvider'
+    )
+
+    consoleError.mockRestore()
   })
 
   it('replays changes from before a refresh to the socket', async () => {

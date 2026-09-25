@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { usePersistentState } from '../usePersistentState.ts'
 
 describe('usePersistentState', () => {
@@ -24,6 +24,20 @@ describe('usePersistentState', () => {
     const { result } = renderHook(() => usePersistentState('count', 1))
 
     expect(result.current[0]).toBe(42)
+  })
+
+  it('keeps working when localStorage is full or blocked', () => {
+    const setItem = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError')
+      })
+    const { result } = renderHook(() => usePersistentState('count', 1))
+
+    act(() => result.current[1](5))
+
+    expect(result.current[0]).toBe(5)
+    setItem.mockRestore()
   })
 
   it('falls back to the initial value when the stored value is broken', () => {

@@ -41,9 +41,17 @@ interface DeliveryFormProps {
   onCancel: () => void
 }
 
-// Type and model are joined with the separator into one name, so the
-// separator itself would break the name apart again later.
 function validateNamePart(value: string) {
+  // isRequired only rejects an empty field. Spaces would pass it, and be
+  // trimmed away on save, leaving an empty name.
+  const hasOnlySpaces = value.length > 0 && value.trim() === ''
+
+  if (hasOnlySpaces) {
+    return "Can't be only spaces."
+  }
+
+  // Type and model are joined with the separator into one name, so the
+  // separator itself would break the name apart again later.
   if (value.includes(NAME_SEPARATOR)) {
     return `Can't contain "${NAME_SEPARATOR.trim()}" with spaces around it.`
   }

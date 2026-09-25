@@ -82,6 +82,30 @@ describe('DeliveryForm', () => {
     expect(onSave).not.toHaveBeenCalled()
   })
 
+  it('does not save fields that only contain spaces', async () => {
+    const user = userEvent.setup()
+    const { onSave } = renderForm({
+      draft: { ...filledDraft, productType: '   ', productModel: '  ' },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(screen.getByLabelText(/Product type/)).toBeInvalid()
+    expect(screen.getByLabelText(/Product model/)).toBeInvalid()
+    expect(screen.getAllByText("Can't be only spaces.")).toHaveLength(2)
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
+  it('saves when pressing Enter in a field', async () => {
+    const user = userEvent.setup()
+    const { onSave } = renderForm()
+
+    await user.click(screen.getByLabelText(/Product model/))
+    await user.keyboard('{Enter}')
+
+    expect(onSave).toHaveBeenCalledOnce()
+  })
+
   it('does not allow the name separator inside a field', async () => {
     const user = userEvent.setup()
     const { onSave } = renderForm({
